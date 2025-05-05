@@ -3,6 +3,7 @@ package br.com.siecola.productsservice.products.controllers;
 import br.com.siecola.productsservice.products.dto.ProductDto;
 import br.com.siecola.productsservice.products.models.Product;
 import br.com.siecola.productsservice.products.repository.ProductsRepository;
+import com.amazonaws.xray.spring.aop.XRayEnabled;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,10 +13,12 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CompletionException;
 
 @RestController
 @RequestMapping("/api/products")
+@XRayEnabled
 public class ProductsController {
     private static final Logger LOG = LogManager.getLogger(ProductsController.class);
     private final ProductsRepository productsRepository;
@@ -38,11 +41,12 @@ public class ProductsController {
         return new ResponseEntity<>(productsDto, HttpStatus.OK);
     }
 
-    @GetMapping("/{id}")
+    @GetMapping("{id}")
     public ResponseEntity<?> getProductById(@PathVariable("id") String id) {
         LOG.info("Get product by id {}", id);
         Product product = productsRepository.getById(id).join();
         if (product != null) {
+            LOG.info("Get product by its id: {}", id);
             return new ResponseEntity<>(new ProductDto(product), HttpStatus.OK);
         } else {
             return new ResponseEntity<>("Product not found", HttpStatus.NOT_FOUND);
@@ -52,17 +56,27 @@ public class ProductsController {
     @PostMapping
     public ResponseEntity<ProductDto> createProduct(@RequestBody ProductDto productDto) {
         Product productCreated = ProductDto.toProduct(productDto);
+        if (productCreated.getId() == null || productCreated.getId().isEmpty()) {
+            productCreated.setId(UUID.randomUUID().toString());
+        }
         productsRepository.create(productCreated).join();
 
-        LOG.info("Product created - ID {}", productCreated);
+        LOG.info("Product created - ID {}", productCreated.getId());
         return new ResponseEntity<>(new ProductDto(productCreated), HttpStatus.CREATED);
     }
+//public ResponseEntity<ProductDto> createProduct(@RequestBody ProductDto productDto) {
+//        Product productCreated = ProductDto.toProduct(productDto);
+//        productsRepository.create(productCreated).join();
+//
+//        LOG.info("Product created - ID {}", productCreated);
+//        return new ResponseEntity<>(new ProductDto(productCreated), HttpStatus.CREATED);
+//    }
 
     @DeleteMapping("{id}")
     public ResponseEntity<?> deleteProductById(@PathVariable("id") String id) {
         Product productDeleted = productsRepository.deleteById(id).join();
-        LOG.info("Product deleted - ID {}", id);
         if (productDeleted != null) {
+            LOG.info("Product deleted - ID {}", id);
             return new ResponseEntity<>(new ProductDto(productDeleted), HttpStatus.OK);
         } else {
             return new ResponseEntity<>("Product not found", HttpStatus.NOT_FOUND);
